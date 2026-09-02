@@ -12,9 +12,11 @@ source = "local"
 # Active terminal adapter: "ghostty" for now.
 terminal = "ghostty"
 
-# Optional cron-style schedule for automatic rotation (not yet wired
-# into a running daemon in this prototype). Leave empty to only
-# rotate on request via `termbg next`.
+# Optional schedule for automatic rotation while `termbg tray` is
+# running: either a Go duration via "@every" (e.g. "@every 30m") or a
+# standard 5-field cron expression (e.g. "0 9,21 * * *"). Leave empty
+# to only rotate on request via `termbg next` or the tray's "Next
+# background" menu item.
 schedule = "@every 30m"
 
 [source_config.local]

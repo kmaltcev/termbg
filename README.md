@@ -31,6 +31,50 @@ wallpaper managers do. Today that means manually editing config files.
   static binary with optional `launchd`/`systemd --user` units for
   autostart.
 
+## Background sources
+
+Backgrounds are provided by pluggable **source providers**. Built-in
+sources planned for the first version:
+
+1. **Local directory** — rotate through image files in a configured
+   folder (optionally recursive, shuffled or sequential).
+2. **wallhaven.cc API** — fetch wallpapers from
+   [wallhaven.cc](https://wallhaven.cc/help/api) using its public `/search`
+   endpoint, with full support for its filter query params, e.g.:
+   - `q` — tag/keyword search (`+tag`, `-tag`, `@username`, `id:123`,
+     `type:png|jpg`, `like:<id>`)
+   - `categories` / `purity` — bitmasks (general/anime/people,
+     sfw/sketchy/nsfw); NSFW requires an API key
+   - `sorting` (`date_added`, `relevance`, `random`, `views`,
+     `favorites`, `toplist`) + `order` (`desc`/`asc`) + `topRange`
+   - `atleast`, `resolutions`, `ratios`, `colors`
+   - `apikey` for the user's own account settings/NSFW access
+   - `seed` for stable pagination through `random` results
+
+   Config exposes these as a raw query-param map so any filter Wallhaven
+   supports can be used without code changes; the source downloads a
+   matching wallpaper, caches it locally, and hands the file path to the
+   rotator like any other source.
+
+### Source plugin interface
+
+Each source implements a small common interface, roughly:
+
+```go
+type Source interface {
+    Name() string
+    // Next returns a local file path to an image, downloading/caching
+    // it if necessary.
+    Next(ctx context.Context) (path string, err error)
+}
+```
+
+New sources (e.g. Unsplash, Pexels, a custom API, an RSS feed of images)
+are added by implementing this interface and registering themselves in a
+source registry — no changes needed to the core rotator, scheduler, tray,
+or CLI. Each source has its own config section
+(`[source.local]`, `[source.wallhaven]`, ...) validated independently.
+
 ## Planned stack
 
 - **Language:** Go — single static binary, easy cross-compilation, no

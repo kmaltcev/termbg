@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/kmaltcev/termbg/compare/v1.1.0...v1.2.0) (2026-09-02)
+
+
+### Features
+
+* **release:** publish a Homebrew formula on release ([#9](https://github.com/kmaltcev/termbg/issues/9)) ([6d2eedf](https://github.com/kmaltcev/termbg/commit/6d2eedfd4b7ae9f76c51e4a3c2c3ca1a3765325b))
+
 ## [1.1.0](https://github.com/kmaltcev/termbg/compare/v1.0.0...v1.1.0) (2026-09-02)
 
 

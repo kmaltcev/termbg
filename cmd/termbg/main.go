@@ -12,9 +12,11 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/kmaltcev/termbg/internal/adapter"
+	"github.com/kmaltcev/termbg/internal/autostart"
 	"github.com/kmaltcev/termbg/internal/config"
 	"github.com/kmaltcev/termbg/internal/rotator"
 	"github.com/kmaltcev/termbg/internal/source"
+	"github.com/kmaltcev/termbg/internal/tray"
 	"github.com/kmaltcev/termbg/internal/wizard"
 
 	// Blank imports register each built-in source/adapter with the
@@ -41,7 +43,7 @@ func main() {
 	}
 	root.PersistentFlags().StringVar(&configPathFlag, "config", "", "path to config.toml (default: $XDG_CONFIG_HOME/termbg/config.toml)")
 
-	root.AddCommand(initCmd(), nextCmd(), statusCmd(), sourcesCmd(), configCmd())
+	root.AddCommand(initCmd(), nextCmd(), statusCmd(), sourcesCmd(), configCmd(), trayCmd())
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "termbg:", err)
@@ -190,6 +192,72 @@ func initCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&force, "force", false, "reconfigure even if a config file already exists, prefilled with current values")
+	return cmd
+}
+
+func trayCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "tray",
+		Short: "Run termbg as a tray/menu bar app (foreground; also drives the schedule)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			path, err := resolveConfigPath()
+			if err != nil {
+				return err
+			}
+			cfg, err := loadOrInit(path)
+			if err != nil {
+				return err
+			}
+			rot, err := buildRotator(cfg)
+			if err != nil {
+				return err
+			}
+			fmt.Println("termbg tray running. Look for its icon in the menu bar/tray.")
+			return tray.Run(tray.App{
+				ConfigPath: path,
+				Rotator:    rot,
+				Schedule:   cfg.Schedule,
+			})
+		},
+	}
+	cmd.AddCommand(&cobra.Command{
+		Use:   "autostart-enable",
+		Short: "Start the tray app automatically at login (macOS only, opt-in)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := autostart.Enable(); err != nil {
+				return err
+			}
+			fmt.Println("Autostart enabled: the tray app will launch at login.")
+			return nil
+		},
+	})
+	cmd.AddCommand(&cobra.Command{
+		Use:   "autostart-disable",
+		Short: "Stop starting the tray app automatically at login",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := autostart.Disable(); err != nil {
+				return err
+			}
+			fmt.Println("Autostart disabled.")
+			return nil
+		},
+	})
+	cmd.AddCommand(&cobra.Command{
+		Use:   "autostart-status",
+		Short: "Show whether tray autostart is currently enabled",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			installed, path, err := autostart.Status()
+			if err != nil {
+				return err
+			}
+			if installed {
+				fmt.Printf("enabled (%s)\n", path)
+			} else {
+				fmt.Println("disabled")
+			}
+			return nil
+		},
+	})
 	return cmd
 }
 

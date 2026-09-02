@@ -15,8 +15,8 @@ wallpaper managers do. Today that means manually editing config files.
 
 `termbg` is a single small binary that:
 
-- Runs as a lightweight background process with a **menu bar / tray icon**
-  (buttons: Next background, Pause/Resume, Choose folder, Quit).
+- Runs as a lightweight **menu bar / tray icon** app (`termbg tray`):
+  Next background, Pause/Resume schedule, Open config file, Quit.
 - Rotates the terminal background image **on a schedule** (interval or
   cron-style, e.g. "every 30 minutes" or "at 9am/9pm").
 - Lets you trigger a change **on request**, via the tray menu or the CLI.
@@ -79,16 +79,16 @@ or CLI. Each source has its own config section
 
 - **Language:** Go — single static binary, easy cross-compilation, no
   runtime dependencies to install.
-- **Tray icon:** `fyne.io/systray`
-- **CLI:** `spf13/cobra` (or `urfave/cli`)
-- **Scheduling:** `robfig/cron/v3` (cron-style) or a simple ticker
+- **Tray icon:** `github.com/gogpu/systray` (pure Go, no cgo — works
+  with `CGO_ENABLED=0` release builds)
+- **CLI:** `spf13/cobra`
+- **Scheduling:** `robfig/cron/v3` (supports both cron expressions and
+  `@every <duration>`)
 - **Config:** TOML file at `~/.config/termbg/config.toml`
-- **IPC:** CLI talks to the running tray/daemon process over a local
-  Unix domain socket.
 
 ## Status
 
-Early CLI prototype. Implemented so far:
+Early CLI + tray prototype. Implemented so far:
 
 - `internal/source` — pluggable `Source` interface + registry
 - `internal/source/local` — rotate through images in a local directory
@@ -105,13 +105,23 @@ Early CLI prototype. Implemented so far:
   the app to see a newly applied background
 - `internal/config` — TOML config loading (see `config.example.toml`)
 - `internal/wizard` — interactive `termbg init` setup flow (huh-based)
+- `internal/scheduler` — parses `@every <duration>` and cron
+  expressions and runs a callback on schedule
+- `internal/tray` — a menu bar/tray icon frontend (`termbg tray`) with
+  "Next background", "Pause/resume schedule", "Open config file" and
+  "Quit"; drives the scheduled rotation loop itself while running.
+  Built on a pure-Go tray library, so it's tested primarily on macOS
+  but should also work on Linux/Windows
+- `internal/autostart` — optional macOS LaunchAgent install/remove so
+  `termbg tray` can start automatically at login
+  (`termbg tray autostart-enable|autostart-disable|autostart-status`)
 - `cmd/termbg` — CLI: `termbg init`, `termbg next`, `termbg status`,
-  `termbg sources`, `termbg config edit|path`
+  `termbg sources`, `termbg config edit|path`, `termbg tray`
 
-Not yet implemented: the scheduler/daemon, the tray icon, and
-persisting rotation state across separate CLI invocations (each `termbg
-next` call currently starts a fresh rotation index for the `local`
-source since there's no long-running process yet).
+Not yet implemented: persisting rotation state across separate CLI
+invocations (each `termbg next` call currently starts a fresh rotation
+index for the `local` source since it's a fresh process each time —
+`termbg tray` doesn't have this limitation since it stays running).
 
 ### Usage (prototype)
 
@@ -132,8 +142,22 @@ go build -o termbg ./cmd/termbg
 ./termbg sources          # list registered source/terminal plugins
 ./termbg status           # show resolved config
 ./termbg next             # apply the next background image now
+./termbg tray             # run the menu bar/tray app (foreground; also drives the schedule)
 ./termbg config edit      # open the config file in $EDITOR
 ./termbg config path      # print the resolved config file path
+```
+
+`termbg tray` is the long-running frontend: it shows a tray icon with
+"Next background" (manual trigger), "Pause/resume schedule" (only shown
+if a schedule is configured), "Open config file" and "Quit", and drives
+automatic rotation according to the configured `schedule` for as long
+as it keeps running. To start it automatically at every login (macOS
+only for now, opt-in — nothing enables this by default):
+
+```sh
+./termbg tray autostart-enable    # install + load a LaunchAgent
+./termbg tray autostart-status    # check whether it's enabled
+./termbg tray autostart-disable   # remove it
 ```
 
 There's no need to hand-edit TOML to get started: running `termbg init`

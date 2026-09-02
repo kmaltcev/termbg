@@ -1,0 +1,41 @@
+# Example termbg configuration.
+# Copy to $XDG_CONFIG_HOME/termbg/config.toml (usually
+# ~/.config/termbg/config.toml) and adjust to taste.
+#
+# Never put a real Wallhaven API key in this file if you intend to
+# commit it anywhere; prefer the TERMBG_WALLHAVEN_API_KEY environment
+# variable, which always takes priority over api_key below.
+
+# Active background source: "local" or "wallhaven".
+source = "local"
+
+# Active terminal adapter: "ghostty" for now.
+terminal = "ghostty"
+
+# Optional cron-style schedule for automatic rotation (not yet wired
+# into a running daemon in this prototype). Leave empty to only
+# rotate on request via `termbg next`.
+schedule = "@every 30m"
+
+[source_config.local]
+dir = "~/Pictures/wallpapers"
+recursive = false
+shuffle = true
+
+[source_config.wallhaven]
+api_key = ""            # prefer TERMBG_WALLHAVEN_API_KEY instead
+cache_dir = ""           # defaults to $XDG_CACHE_HOME/termbg/wallhaven
+
+  [source_config.wallhaven.params]
+  # Any wallhaven.cc /search query parameter is accepted here as-is,
+  # see https://wallhaven.cc/help/api. A few examples:
+  q = "nature"
+  categories = "100"     # general only
+  purity = "100"         # sfw only
+  sorting = "random"
+  atleast = "1920x1080"
+  ratios = "16x9"
+
+[terminal_config.ghostty]
+# Defaults to $XDG_CONFIG_HOME/ghostty/config if left empty.
+config_path = ""

@@ -88,9 +88,34 @@ or CLI. Each source has its own config section
 
 ## Status
 
-Early prototype / idea stage. Nothing is implemented yet — this README
-captures the initial design so implementation can start incrementally.
+Early CLI prototype. Implemented so far:
+
+- `internal/source` — pluggable `Source` interface + registry
+- `internal/source/local` — rotate through images in a local directory
+- `internal/source/wallhaven` — wallhaven.cc `/search` API source with
+  arbitrary filter passthrough and local caching of downloaded images
+- `internal/adapter` — pluggable terminal `Adapter` interface + registry
+- `internal/adapter/ghostty` — writes `background-image` into Ghostty's
+  config file
+- `internal/config` — TOML config loading (see `config.example.toml`)
+- `cmd/termbg` — CLI: `termbg next`, `termbg status`, `termbg sources`
+
+Not yet implemented: the scheduler/daemon, the tray icon, and
+persisting rotation state across separate CLI invocations (each `termbg
+next` call currently starts a fresh rotation index for the `local`
+source since there's no long-running process yet).
+
+### Usage (prototype)
+
+```sh
+go build -o termbg ./cmd/termbg
+cp config.example.toml ~/.config/termbg/config.toml   # then edit it
+
+./termbg sources        # list registered source/terminal plugins
+./termbg status         # show resolved config
+./termbg next            # apply the next background image now
+```
 
 ## License
 
-TBD.
+MIT — see [LICENSE](LICENSE).

@@ -71,11 +71,15 @@ func Run(existing *config.Config) (*config.Config, error) {
 		ghosttyPosition = "center"
 	}
 	ghosttyRepeat, _ := ghosttyCfg["repeat"].(bool)
-	ghosttyOpacity, ok := ghosttyCfg["opacity"].(float64)
-	if !ok {
-		ghosttyOpacity = 1.0
+	ghosttyColor, _ := ghosttyCfg["color"].(string)
+	if ghosttyColor == "" {
+		ghosttyColor = "#000000"
 	}
-	ghosttyOpacityStr := strconv.FormatFloat(ghosttyOpacity, 'g', -1, 64)
+	ghosttyImageOpacity, ok := ghosttyCfg["image_opacity"].(float64)
+	if !ok {
+		ghosttyImageOpacity = 1.0
+	}
+	ghosttyImageOpacityStr := strconv.FormatFloat(ghosttyImageOpacity, 'g', -1, 64)
 
 	localCfg := cfg.SourceConfig["local"]
 	localDir, _ := localCfg["dir"].(string)
@@ -301,16 +305,28 @@ func Run(existing *config.Config) (*config.Config, error) {
 		).WithHideFunc(isGhostty),
 		huh.NewGroup(
 			huh.NewInput().
-				Title("Ghostty: background opacity (background-opacity)").
-				Description("0.0 = fully transparent, 1.0 = fully opaque (default). Applies to the whole terminal background, including any image.").
-				Value(&ghosttyOpacityStr).
+				Title("Ghostty: solid background color (background), shown behind/around the image").
+				Description(`Hex color, e.g. "#000000" for black. This stays fully opaque; use the next question to make the image itself see-through over it.`).
+				Value(&ghosttyColor).
+				Validate(func(s string) error {
+					if strings.TrimSpace(s) == "" {
+						return fmt.Errorf("a color is required, e.g. #000000")
+					}
+					return nil
+				}),
+		).WithHideFunc(isGhostty),
+		huh.NewGroup(
+			huh.NewInput().
+				Title("Ghostty: image opacity over the background color (background-image-opacity)").
+				Description("0.0 = image invisible (solid color only), 1.0 = fully opaque image (default). Lower this to let the solid background color show through the image.").
+				Value(&ghosttyImageOpacityStr).
 				Validate(func(s string) error {
 					v, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
 					if err != nil {
-						return fmt.Errorf("must be a number between 0.0 and 1.0")
+						return fmt.Errorf("must be a number, e.g. 0.5")
 					}
-					if v < 0 || v > 1 {
-						return fmt.Errorf("must be between 0.0 and 1.0")
+					if v < 0 {
+						return fmt.Errorf("must be 0.0 or greater")
 					}
 					return nil
 				}),
@@ -370,8 +386,9 @@ func Run(existing *config.Config) (*config.Config, error) {
 		cfg.TerminalConfig["ghostty"]["fit"] = ghosttyFit
 		cfg.TerminalConfig["ghostty"]["position"] = ghosttyPosition
 		cfg.TerminalConfig["ghostty"]["repeat"] = ghosttyRepeat
-		if v, err := strconv.ParseFloat(strings.TrimSpace(ghosttyOpacityStr), 64); err == nil {
-			cfg.TerminalConfig["ghostty"]["opacity"] = v
+		cfg.TerminalConfig["ghostty"]["color"] = ghosttyColor
+		if v, err := strconv.ParseFloat(strings.TrimSpace(ghosttyImageOpacityStr), 64); err == nil {
+			cfg.TerminalConfig["ghostty"]["image_opacity"] = v
 		}
 	}
 

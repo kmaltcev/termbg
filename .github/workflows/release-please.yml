@@ -4,8 +4,17 @@ name: release-please
 # inspects Conventional Commits history since the last release and
 # either opens/updates a "release PR" (bumping version + CHANGELOG) or,
 # once that release PR itself is merged, tags the repo and publishes a
-# GitHub Release. Publishing the release triggers release-build.yml to
-# attach cross-platform binaries.
+# GitHub Release.
+#
+# The binary build (release-build job below) runs in this SAME
+# workflow, gated on release-please's `release_created` output,
+# instead of relying on the `release: published` event in a separate
+# workflow. That's because release-please uses the default
+# GITHUB_TOKEN, and GitHub does not let events triggered by the
+# default GITHUB_TOKEN start *new* workflow runs (to avoid recursive
+# loops) — so a separate `on: release: published` workflow would never
+# actually fire. Keeping both jobs in one workflow, triggered by the
+# original push, sidesteps that limitation entirely.
 
 on:
   push:
@@ -19,7 +28,34 @@ permissions:
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       - uses: googleapis/release-please-action@v4
+        id: release
         with:
           release-type: go
+
+  release-build:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.0](https://github.com/kmaltcev/termbg/compare/v1.2.0...v1.3.0) (2026-09-02)
+
+
+### Features
+
+* **ghostty:** replace whole-terminal opacity with solid color + image opacity ([#13](https://github.com/kmaltcev/termbg/issues/13)) ([d0bfd5d](https://github.com/kmaltcev/termbg/commit/d0bfd5d3399c9ab201dcbb9f1e8a29b5aaaa68de))
+* **wizard,ghostty,wallhaven:** one-question-per-screen wizard, ghostty background-opacity, wallhaven pagination fix ([#11](https://github.com/kmaltcev/termbg/issues/11)) ([d0544e6](https://github.com/kmaltcev/termbg/commit/d0544e615eb657b3cc0e309ad2d583b6c3929781))
+
 ## [1.2.0](https://github.com/kmaltcev/termbg/compare/v1.1.0...v1.2.0) (2026-09-02)
 
 

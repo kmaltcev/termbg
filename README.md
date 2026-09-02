@@ -98,7 +98,9 @@ Early CLI prototype. Implemented so far:
 - `internal/adapter/ghostty` — writes `background-image` into Ghostty's
   config file
 - `internal/config` — TOML config loading (see `config.example.toml`)
-- `cmd/termbg` — CLI: `termbg next`, `termbg status`, `termbg sources`
+- `internal/wizard` — interactive `termbg init` setup flow (huh-based)
+- `cmd/termbg` — CLI: `termbg init`, `termbg next`, `termbg status`,
+  `termbg sources`, `termbg config edit|path`
 
 Not yet implemented: the scheduler/daemon, the tray icon, and
 persisting rotation state across separate CLI invocations (each `termbg
@@ -109,12 +111,25 @@ source since there's no long-running process yet).
 
 ```sh
 go build -o termbg ./cmd/termbg
-cp config.example.toml ~/.config/termbg/config.toml   # then edit it
 
-./termbg sources        # list registered source/terminal plugins
-./termbg status         # show resolved config
-./termbg next            # apply the next background image now
+./termbg init            # interactive setup wizard (source, terminal, schedule)
+./termbg sources          # list registered source/terminal plugins
+./termbg status           # show resolved config
+./termbg next             # apply the next background image now
+./termbg config edit      # open the config file in $EDITOR
+./termbg config path      # print the resolved config file path
 ```
+
+There's no need to hand-edit TOML to get started: running `termbg init`
+(built with [charmbracelet/huh](https://github.com/charmbracelet/huh))
+walks you through picking a source, its settings (local directory path,
+or wallhaven tags/categories/purity/sorting/resolution/ratio and an
+optional API key), which terminal adapter to use, and a rotation
+schedule. Any command that needs a config (`next`, `status`) will
+automatically launch this wizard the first time if no config file
+exists yet. Re-run `termbg init --force` any time to reconfigure,
+prefilled with your current settings; `config.example.toml` remains
+available for reference or fully manual setups.
 
 ## License
 

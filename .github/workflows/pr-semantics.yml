@@ -1,0 +1,41 @@
+name: PR semantics
+
+# Enforces Conventional Commits style PR titles (e.g. "feat: add
+# wallhaven source", "fix(cli): handle missing config") since release
+# automation (release-please) derives version bumps and changelog
+# entries from these. Runs only against the PR metadata, so it's cheap
+# and fast to require on every PR.
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  title-lint:
+    name: Conventional PR title
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            perf
+            test
+            build
+            ci
+            chore
+            revert
+          requireScope: false
+          subjectPattern: ^(?![A-Z]).+$
+          subjectPatternError: |
+            The PR title's subject (after the type/scope prefix) must start
+            with a lowercase letter, e.g. "feat: add x" not "feat: Add x".

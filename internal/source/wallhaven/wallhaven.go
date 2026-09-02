@@ -27,10 +27,11 @@ func init() {
 	source.Register("wallhaven", newFromConfig)
 }
 
-const (
-	apiBase      = "https://wallhaven.cc/api/v1/search"
-	envAPIKeyVar = "TERMBG_WALLHAVEN_API_KEY"
-)
+const envAPIKeyVar = "TERMBG_WALLHAVEN_API_KEY"
+
+// apiBase is a var (not const) so tests can point it at a local
+// httptest server instead of the real wallhaven.cc API.
+var apiBase = "https://wallhaven.cc/api/v1/search"
 
 // Source fetches wallpapers from wallhaven.cc matching a set of search
 // parameters, downloads them, and serves them as local file paths.
@@ -162,6 +163,15 @@ func (s *Source) fetchPage(ctx context.Context) error {
 		return fmt.Errorf("wallhaven source: decoding response: %w", err)
 	}
 	s.results = parsed.Data
+	// termbg is typically invoked as a short-lived CLI process, so
+	// each Next() call usually starts from a fresh idx=0 on a newly
+	// fetched page. Shuffle so that "first result" isn't always the
+	// same wallpaper (e.g. sorting=views/date_added returns the exact
+	// same ordering on every fetch) — every call should genuinely
+	// pick a random wallpaper among the matching results.
+	rand.Shuffle(len(s.results), func(i, j int) {
+		s.results[i], s.results[j] = s.results[j], s.results[i]
+	})
 	return nil
 }
 

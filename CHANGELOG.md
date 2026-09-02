@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/kmaltcev/termbg/compare/v1.0.0...v1.1.0) (2026-09-02)
+
+
+### Features
+
+* **ghostty:** support background-image-fit/-position/-repeat ([#7](https://github.com/kmaltcev/termbg/issues/7)) ([1b8ec11](https://github.com/kmaltcev/termbg/commit/1b8ec11546b49e1026beebaca9fcaf5e9956251c))
+
 ## 1.0.0 (2026-09-02)
 
 

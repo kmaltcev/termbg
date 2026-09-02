@@ -39,3 +39,7 @@ cache_dir = ""           # defaults to $XDG_CACHE_HOME/termbg/wallhaven
 [terminal_config.ghostty]
 # Defaults to $XDG_CONFIG_HOME/ghostty/config if left empty.
 config_path = ""
+# fit = "contain"       # contain | cover | stretch | none
+# position = "center"   # center, top-left, bottom-right, ...
+# repeat = false
+# opacity = 1.0         # 0.0 (fully transparent) - 1.0 (fully opaque)

@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
@@ -53,6 +54,11 @@ type wallpaper struct {
 
 type searchResponse struct {
 	Data []wallpaper `json:"data"`
+	Meta searchMeta  `json:"meta"`
+}
+
+type searchMeta struct {
+	LastPage int `json:"last_page"`
 }
 
 func newFromConfig(cfg map[string]any) (source.Source, error) {
@@ -127,6 +133,49 @@ func (s *Source) Next(ctx context.Context) (string, error) {
 }
 
 func (s *Source) fetchPage(ctx context.Context) error {
+	first, err := s.search(ctx, 0)
+	if err != nil {
+		return err
+	}
+
+	results := first.Data
+	// wallhaven only returns 24 results per page; without paging,
+	// every fetch would return the exact same fixed page-1 set (small
+	// and, for non-random sort orders like sorting=views, completely
+	// deterministic), making filters/tags feel "stuck" on the same
+	// handful of images no matter how many times Next() is called.
+	// Once we know how many pages actually match the configured
+	// filters, jump to a random one so repeated calls explore the
+	// full result set instead of only ever recycling page 1.
+	if first.Meta.LastPage > 1 {
+		page := 1 + rand.Intn(first.Meta.LastPage)
+		if page > 1 {
+			if other, err := s.search(ctx, page); err == nil && len(other.Data) > 0 {
+				results = other.Data
+			}
+			// If the random page request fails or comes back empty
+			// (wallhaven caps how deep pagination actually works),
+			// silently fall back to the page-1 results already in
+			// hand rather than erroring the whole rotation out.
+		}
+	}
+
+	s.results = results
+	// termbg is typically invoked as a short-lived CLI process, so
+	// each Next() call usually starts from a fresh idx=0 on a newly
+	// fetched page. Shuffle so that "first result" isn't always the
+	// same wallpaper (e.g. sorting=views/date_added returns the exact
+	// same ordering on every fetch) — every call should genuinely
+	// pick a random wallpaper among the matching results.
+	rand.Shuffle(len(s.results), func(i, j int) {
+		s.results[i], s.results[j] = s.results[j], s.results[i]
+	})
+	return nil
+}
+
+// search issues a single wallhaven /search request. page == 0 omits
+// the "page" query parameter entirely (wallhaven defaults to page 1).
+func (s *Source) search(ctx context.Context, page int) (*searchResponse, error) {
 	q := url.Values{}
 	for k, v := range s.params {
 		q[k] = v
@@ -140,39 +189,32 @@ func (s *Source) fetchPage(ctx context.Context) error {
 	if q.Get("sorting") == "random" && q.Get("seed") == "" {
 		q.Set("seed", randomSeed())
 	}
+	if page > 0 {
+		q.Set("page", strconv.Itoa(page))
+	}
 
 	reqURL := apiBase + "?" + q.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
-		return fmt.Errorf("wallhaven source: building request: %w", err)
+		return nil, fmt.Errorf("wallhaven source: building request: %w", err)
 	}
 
 	resp, err := s.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("wallhaven source: request failed: %w", err)
+		return nil, fmt.Errorf("wallhaven source: request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-		return fmt.Errorf("wallhaven source: unexpected status %s: %s", resp.Status, body)
+		return nil, fmt.Errorf("wallhaven source: unexpected status %s: %s", resp.Status, body)
 	}
 
 	var parsed searchResponse
 	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
-		return fmt.Errorf("wallhaven source: decoding response: %w", err)
+		return nil, fmt.Errorf("wallhaven source: decoding response: %w", err)
 	}
-	s.results = parsed.Data
-	// termbg is typically invoked as a short-lived CLI process, so
-	// each Next() call usually starts from a fresh idx=0 on a newly
-	// fetched page. Shuffle so that "first result" isn't always the
-	// same wallpaper (e.g. sorting=views/date_added returns the exact
-	// same ordering on every fetch) — every call should genuinely
-	// pick a random wallpaper among the matching results.
-	rand.Shuffle(len(s.results), func(i, j int) {
-		s.results[i], s.results[j] = s.results[j], s.results[i]
-	})
-	return nil
+	return &parsed, nil
 }
 
 func (s *Source) download(ctx context.Context, w wallpaper) (string, error) {

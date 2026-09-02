@@ -6,6 +6,7 @@ package wizard
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"charm.land/huh/v2"
@@ -18,10 +19,28 @@ import (
 // picks "custom" in the schedule select, prompting a free-text follow-up.
 const scheduleCustom = "__custom__"
 
+// optHeight computes the huh Select/MultiSelect Height needed so all n
+// options are visible without scrolling. huh's internal viewport
+// height is (Height - title lines - description lines), so we have to
+// pad for those to avoid clipping options off-screen.
+func optHeight(n int, hasDescription bool) int {
+	h := n + 1 // +1 for the title line
+	if hasDescription {
+		h += 2 // description may wrap to ~2 lines
+	}
+	return h
+}
+
 // Run walks the user through configuring termbg and returns the
 // resulting config. existing may be a zero-value *config.Config (fresh
 // setup) or a previously loaded one (reconfiguring via `init --force`),
 // whose values are used as the form's starting defaults.
+//
+// Every question is its own huh.Group so the terminal shows exactly
+// one question at a time (rather than several stacked questions
+// competing for the same screen, which used to truncate option lists).
+// Select/MultiSelect fields also set an explicit Height matching their
+// option count, so all choices are visible without scrolling.
 func Run(existing *config.Config) (*config.Config, error) {
 	cfg := *existing
 	if cfg.SourceConfig == nil {
@@ -52,6 +71,11 @@ func Run(existing *config.Config) (*config.Config, error) {
 		ghosttyPosition = "center"
 	}
 	ghosttyRepeat, _ := ghosttyCfg["repeat"].(bool)
+	ghosttyOpacity, ok := ghosttyCfg["opacity"].(float64)
+	if !ok {
+		ghosttyOpacity = 1.0
+	}
+	ghosttyOpacityStr := strconv.FormatFloat(ghosttyOpacity, 'g', -1, 64)
 
 	localCfg := cfg.SourceConfig["local"]
 	localDir, _ := localCfg["dir"].(string)
@@ -79,30 +103,40 @@ func Run(existing *config.Config) (*config.Config, error) {
 
 	scheduleChoice, scheduleCustomValue := splitSchedule(cfg.Schedule)
 
-	var terminalGroup []huh.Field
-	if len(terminals) > 1 {
-		opts := make([]huh.Option[string], 0, len(terminals))
-		for _, t := range terminals {
-			opts = append(opts, huh.NewOption(t, t))
-		}
-		terminalGroup = append(terminalGroup, huh.NewSelect[string]().
-			Title("Which terminal emulator should termbg manage?").
-			Options(opts...).
-			Value(&terminalChoice))
-	}
+	var groups []*huh.Group
 
-	form := huh.NewForm(
-		huh.NewGroup(append([]huh.Field{
+	groups = append(groups,
+		huh.NewGroup(
 			huh.NewSelect[string]().
 				Title("Where should background images come from?").
 				Options(
 					huh.NewOption("Local directory", "local"),
 					huh.NewOption("wallhaven.cc (online, filterable)", "wallhaven"),
 				).
+				Height(optHeight(2, false)).
 				Value(&sourceChoice),
-		}, terminalGroup...)...),
+		),
+	)
 
-		// --- local source ---
+	if len(terminals) > 1 {
+		opts := make([]huh.Option[string], 0, len(terminals))
+		for _, t := range terminals {
+			opts = append(opts, huh.NewOption(t, t))
+		}
+		groups = append(groups,
+			huh.NewGroup(
+				huh.NewSelect[string]().
+					Title("Which terminal emulator should termbg manage?").
+					Options(opts...).
+					Height(optHeight(len(opts), false)).
+					Value(&terminalChoice),
+			),
+		)
+	}
+
+	// --- local source ---
+	isLocal := func() bool { return sourceChoice != "local" }
+	groups = append(groups,
 		huh.NewGroup(
 			huh.NewInput().
 				Title("Path to the directory containing your wallpaper images").
@@ -113,29 +147,41 @@ func Run(existing *config.Config) (*config.Config, error) {
 					}
 					return nil
 				}),
+		).WithHideFunc(isLocal),
+		huh.NewGroup(
 			huh.NewConfirm().
 				Title("Also look inside subdirectories?").
 				Value(&localRecursive),
+		).WithHideFunc(isLocal),
+		huh.NewGroup(
 			huh.NewSelect[string]().
 				Title("Rotation order").
 				Options(
 					huh.NewOption("Shuffle (random order)", "shuffle"),
 					huh.NewOption("Sequential (alphabetical, wraps around)", "sequential"),
 				).
+				Height(optHeight(2, false)).
 				Value(&localRotation),
-		).WithHideFunc(func() bool { return sourceChoice != "local" }),
+		).WithHideFunc(isLocal),
+	)
 
-		// --- wallhaven source ---
+	// --- wallhaven source ---
+	isWallhaven := func() bool { return sourceChoice != "wallhaven" }
+	groups = append(groups,
 		huh.NewGroup(
 			huh.NewInput().
 				Title("wallhaven.cc API key (leave empty to use $TERMBG_WALLHAVEN_API_KEY, or for SFW-only anonymous access)").
 				Description("An API key is only required for NSFW content or to reuse your account's saved browsing settings. It is stored in your local config file, never committed to a repo.").
 				Value(&whAPIKey).
 				EchoMode(huh.EchoModePassword),
+		).WithHideFunc(isWallhaven),
+		huh.NewGroup(
 			huh.NewInput().
 				Title("Tags / keywords to search for (wallhaven `q` filter)").
 				Description(`Examples: "nature", "+cyberpunk +city", "-people", "id:123". Leave empty to browse latest wallpapers unfiltered.`).
 				Value(&whTags),
+		).WithHideFunc(isWallhaven),
+		huh.NewGroup(
 			huh.NewMultiSelect[string]().
 				Title("Categories").
 				Options(
@@ -143,7 +189,10 @@ func Run(existing *config.Config) (*config.Config, error) {
 					huh.NewOption("Anime", "anime"),
 					huh.NewOption("People", "people"),
 				).
+				Height(optHeight(3, false)).
 				Value(&whCategories),
+		).WithHideFunc(isWallhaven),
+		huh.NewGroup(
 			huh.NewMultiSelect[string]().
 				Title("Purity").
 				Description("NSFW requires an API key.").
@@ -152,7 +201,10 @@ func Run(existing *config.Config) (*config.Config, error) {
 					huh.NewOption("Sketchy", "sketchy"),
 					huh.NewOption("NSFW", "nsfw"),
 				).
+				Height(optHeight(3, true)).
 				Value(&whPurity),
+		).WithHideFunc(isWallhaven),
+		huh.NewGroup(
 			huh.NewSelect[string]().
 				Title("Sort results by").
 				Options(
@@ -163,16 +215,23 @@ func Run(existing *config.Config) (*config.Config, error) {
 					huh.NewOption("Favorites", "favorites"),
 					huh.NewOption("Toplist", "toplist"),
 				).
+				Height(optHeight(6, false)).
 				Value(&whSorting),
+		).WithHideFunc(isWallhaven),
+		huh.NewGroup(
 			huh.NewInput().
 				Title("Minimum resolution, e.g. 1920x1080 (optional)").
 				Value(&whResolution),
+		).WithHideFunc(isWallhaven),
+		huh.NewGroup(
 			huh.NewInput().
 				Title("Aspect ratio, e.g. 16x9 (optional)").
 				Value(&whRatio),
-		).WithHideFunc(func() bool { return sourceChoice != "wallhaven" }),
+		).WithHideFunc(isWallhaven),
+	)
 
-		// --- schedule (applies regardless of source) ---
+	// --- schedule (applies regardless of source) ---
+	groups = append(groups,
 		huh.NewGroup(
 			huh.NewSelect[string]().
 				Title("How often should the background rotate automatically?").
@@ -186,7 +245,10 @@ func Run(existing *config.Config) (*config.Config, error) {
 					huh.NewOption("Once a day", "@every 24h"),
 					huh.NewOption("Custom cron/interval expression", scheduleCustom),
 				).
+				Height(optHeight(7, true)).
 				Value(&scheduleChoice),
+		),
+		huh.NewGroup(
 			huh.NewInput().
 				Title("Custom schedule expression").
 				Description(`Either a cron expression (e.g. "0 9,21 * * *") or a Go duration via "@every", e.g. "@every 45m".`).
@@ -198,8 +260,11 @@ func Run(existing *config.Config) (*config.Config, error) {
 					return nil
 				}),
 		).WithHideFunc(func() bool { return scheduleChoice != scheduleCustom }),
+	)
 
-		// --- ghostty display options ---
+	// --- ghostty display options ---
+	isGhostty := func() bool { return terminalChoice != "ghostty" }
+	groups = append(groups,
 		huh.NewGroup(
 			huh.NewSelect[string]().
 				Title("Ghostty: how should the image fit the window? (background-image-fit)").
@@ -209,7 +274,10 @@ func Run(existing *config.Config) (*config.Config, error) {
 					huh.NewOption("Stretch (fill window, ignores aspect ratio)", "stretch"),
 					huh.NewOption("None (no scaling)", "none"),
 				).
+				Height(optHeight(4, false)).
 				Value(&ghosttyFit),
+		).WithHideFunc(isGhostty),
+		huh.NewGroup(
 			huh.NewSelect[string]().
 				Title("Ghostty: where should the image be anchored? (background-image-position)").
 				Options(
@@ -223,12 +291,33 @@ func Run(existing *config.Config) (*config.Config, error) {
 					huh.NewOption("Bottom center", "bottom-center"),
 					huh.NewOption("Bottom right", "bottom-right"),
 				).
+				Height(optHeight(9, false)).
 				Value(&ghosttyPosition),
+		).WithHideFunc(isGhostty),
+		huh.NewGroup(
 			huh.NewConfirm().
 				Title("Ghostty: repeat/tile the image to fill blank space? (background-image-repeat)").
 				Value(&ghosttyRepeat),
-		).WithHideFunc(func() bool { return terminalChoice != "ghostty" }),
+		).WithHideFunc(isGhostty),
+		huh.NewGroup(
+			huh.NewInput().
+				Title("Ghostty: background opacity (background-opacity)").
+				Description("0.0 = fully transparent, 1.0 = fully opaque (default). Applies to the whole terminal background, including any image.").
+				Value(&ghosttyOpacityStr).
+				Validate(func(s string) error {
+					v, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
+					if err != nil {
+						return fmt.Errorf("must be a number between 0.0 and 1.0")
+					}
+					if v < 0 || v > 1 {
+						return fmt.Errorf("must be between 0.0 and 1.0")
+					}
+					return nil
+				}),
+		).WithHideFunc(isGhostty),
 	)
+
+	form := huh.NewForm(groups...)
 
 	if err := form.Run(); err != nil {
 		return nil, fmt.Errorf("wizard: %w", err)
@@ -281,6 +370,9 @@ func Run(existing *config.Config) (*config.Config, error) {
 		cfg.TerminalConfig["ghostty"]["fit"] = ghosttyFit
 		cfg.TerminalConfig["ghostty"]["position"] = ghosttyPosition
 		cfg.TerminalConfig["ghostty"]["repeat"] = ghosttyRepeat
+		if v, err := strconv.ParseFloat(strings.TrimSpace(ghosttyOpacityStr), 64); err == nil {
+			cfg.TerminalConfig["ghostty"]["opacity"] = v
+		}
 	}
 
 	return &cfg, nil

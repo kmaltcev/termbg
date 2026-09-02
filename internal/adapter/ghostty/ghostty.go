@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/kmaltcev/termbg/internal/adapter"
@@ -24,6 +25,7 @@ const (
 	keyFit      = "background-image-fit"
 	keyPosition = "background-image-position"
 	keyRepeat   = "background-image-repeat"
+	keyOpacity  = "background-opacity"
 )
 
 // ValidFits are the fit values Ghostty accepts for background-image-fit
@@ -40,12 +42,13 @@ var ValidPositions = []string{
 }
 
 // Adapter writes the background-image key (and optional fit/position/
-// repeat keys) into a Ghostty config file.
+// repeat/opacity keys) into a Ghostty config file.
 type Adapter struct {
 	configPath string
 	fit        string
 	position   string
 	repeat     *bool
+	opacity    *float64
 }
 
 func newFromConfig(cfg map[string]any) (adapter.Adapter, error) {
@@ -62,6 +65,9 @@ func newFromConfig(cfg map[string]any) (adapter.Adapter, error) {
 	a.position, _ = cfg["position"].(string)
 	if repeat, ok := cfg["repeat"].(bool); ok {
 		a.repeat = &repeat
+	}
+	if opacity, ok := cfg["opacity"].(float64); ok {
+		a.opacity = &opacity
 	}
 	return a, nil
 }
@@ -86,11 +92,12 @@ func defaultConfigPath() (string, error) {
 func (a *Adapter) Name() string { return "ghostty" }
 
 // SetBackground rewrites the background-image line (and, if
-// configured, background-image-fit/-position/-repeat) in the Ghostty
-// config file, adding keys that are absent and leaving all other
-// lines/config keys untouched. Ghostty does not reload config changes
-// automatically: the user must reload manually (Ctrl+Shift+, or the
-// "Reload Configuration" menu item) for the new background to appear.
+// configured, background-image-fit/-position/-repeat and
+// background-opacity) in the Ghostty config file, adding keys that are
+// absent and leaving all other lines/config keys untouched. Ghostty
+// does not reload config changes automatically: the user must reload
+// manually (Ctrl+Shift+, or the "Reload Configuration" menu item) for
+// the new background to appear.
 func (a *Adapter) SetBackground(imagePath string) error {
 	lines, err := readLines(a.configPath)
 	if err != nil {
@@ -106,6 +113,9 @@ func (a *Adapter) SetBackground(imagePath string) error {
 	}
 	if a.repeat != nil {
 		lines = setKeyValue(lines, keyRepeat, fmt.Sprintf("%t", *a.repeat))
+	}
+	if a.opacity != nil {
+		lines = setKeyValue(lines, keyOpacity, strconv.FormatFloat(*a.opacity, 'g', -1, 64))
 	}
 
 	if err := os.MkdirAll(filepath.Dir(a.configPath), 0o755); err != nil {

@@ -20,14 +20,14 @@ func TestSetBackgroundWritesImageOnly(t *testing.T) {
 	if !strings.Contains(got, "background-image = /tmp/foo.png") {
 		t.Fatalf("missing background-image line, got:\n%s", got)
 	}
-	for _, key := range []string{keyFit, keyPosition, keyRepeat} {
+	for _, key := range []string{keyFit, keyPosition, keyRepeat, keyOpacity} {
 		if strings.Contains(got, key) {
 			t.Fatalf("unexpected %s line present when unconfigured, got:\n%s", key, got)
 		}
 	}
 }
 
-func TestSetBackgroundWritesFitPositionRepeat(t *testing.T) {
+func TestSetBackgroundWritesFitPositionRepeatOpacity(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config")
 
@@ -36,6 +36,8 @@ func TestSetBackgroundWritesFitPositionRepeat(t *testing.T) {
 	a.position = "top-right"
 	repeat := true
 	a.repeat = &repeat
+	opacity := 0.85
+	a.opacity = &opacity
 
 	if err := a.SetBackground("/tmp/foo.png"); err != nil {
 		t.Fatalf("SetBackground: %v", err)
@@ -47,6 +49,7 @@ func TestSetBackgroundWritesFitPositionRepeat(t *testing.T) {
 		"background-image-fit = cover",
 		"background-image-position = top-right",
 		"background-image-repeat = true",
+		"background-opacity = 0.85",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q, got:\n%s", want, got)

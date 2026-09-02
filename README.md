@@ -97,8 +97,9 @@ Early CLI prototype. Implemented so far:
 - `internal/adapter` — pluggable terminal `Adapter` interface + registry
 - `internal/adapter/ghostty` — writes `background-image`,
   `background-image-fit`, `background-image-position`,
-  `background-image-repeat` and `background-opacity` into Ghostty's
-  config file. Ghostty does
+  `background-image-repeat`, `background` (solid color shown behind
+  the image) and `background-image-opacity` (image opacity over that
+  solid color) into Ghostty's config file. Ghostty does
   **not** reload config changes automatically — reload manually
   (`Ctrl+Shift+,` or the "Reload Configuration" menu item) or restart
   the app to see a newly applied background

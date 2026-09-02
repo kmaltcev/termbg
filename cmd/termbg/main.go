@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 
 	"github.com/spf13/cobra"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/kmaltcev/termbg/internal/config"
 	"github.com/kmaltcev/termbg/internal/rotator"
 	"github.com/kmaltcev/termbg/internal/source"
+	"github.com/kmaltcev/termbg/internal/wizard"
 
 	// Blank imports register each built-in source/adapter with the
 	// registries in internal/source and internal/adapter. Adding a
@@ -39,7 +41,7 @@ func main() {
 	}
 	root.PersistentFlags().StringVar(&configPathFlag, "config", "", "path to config.toml (default: $XDG_CONFIG_HOME/termbg/config.toml)")
 
-	root.AddCommand(nextCmd(), statusCmd(), sourcesCmd())
+	root.AddCommand(initCmd(), nextCmd(), statusCmd(), sourcesCmd(), configCmd())
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "termbg:", err)
@@ -52,6 +54,26 @@ func resolveConfigPath() (string, error) {
 		return configPathFlag, nil
 	}
 	return config.DefaultPath()
+}
+
+// loadOrInit loads the config at path, transparently running the
+// interactive setup wizard first if no config file exists yet — so
+// commands like `termbg next` work out of the box on a fresh install
+// without requiring a separate manual `termbg init` step.
+func loadOrInit(path string) (*config.Config, error) {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		fmt.Println("No termbg config found yet — let's set one up.")
+		cfg, err := wizard.Run(&config.Config{})
+		if err != nil {
+			return nil, err
+		}
+		if err := config.Save(path, cfg); err != nil {
+			return nil, err
+		}
+		fmt.Printf("Saved config to %s\n\n", path)
+		return cfg, nil
+	}
+	return config.Load(path)
 }
 
 func buildRotator(cfg *config.Config) (*rotator.Rotator, error) {
@@ -82,7 +104,7 @@ func nextCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			cfg, err := config.Load(path)
+			cfg, err := loadOrInit(path)
 			if err != nil {
 				return err
 			}
@@ -109,7 +131,7 @@ func statusCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			cfg, err := config.Load(path)
+			cfg, err := loadOrInit(path)
 			if err != nil {
 				return err
 			}
@@ -132,4 +154,84 @@ func sourcesCmd() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+func initCmd() *cobra.Command {
+	var force bool
+	cmd := &cobra.Command{
+		Use:   "init",
+		Short: "Interactively configure termbg (source, terminal, schedule)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			path, err := resolveConfigPath()
+			if err != nil {
+				return err
+			}
+
+			existing := &config.Config{}
+			if _, statErr := os.Stat(path); statErr == nil {
+				if !force {
+					return fmt.Errorf("config already exists at %s (use --force to reconfigure)", path)
+				}
+				existing, err = config.Load(path)
+				if err != nil {
+					return err
+				}
+			}
+
+			cfg, err := wizard.Run(existing)
+			if err != nil {
+				return err
+			}
+			if err := config.Save(path, cfg); err != nil {
+				return err
+			}
+			fmt.Printf("Saved config to %s\n", path)
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&force, "force", false, "reconfigure even if a config file already exists, prefilled with current values")
+	return cmd
+}
+
+func configCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "config",
+		Short: "Inspect or edit the termbg config file",
+	}
+	cmd.AddCommand(&cobra.Command{
+		Use:   "edit",
+		Short: "Open the config file in $EDITOR (falls back to vi)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			path, err := resolveConfigPath()
+			if err != nil {
+				return err
+			}
+			if _, statErr := os.Stat(path); os.IsNotExist(statErr) {
+				return fmt.Errorf("no config file at %s yet; run `termbg init` first", path)
+			}
+
+			editor := os.Getenv("EDITOR")
+			if editor == "" {
+				editor = "vi"
+			}
+			c := exec.Command(editor, path)
+			c.Stdin = os.Stdin
+			c.Stdout = os.Stdout
+			c.Stderr = os.Stderr
+			return c.Run()
+		},
+	})
+	cmd.AddCommand(&cobra.Command{
+		Use:   "path",
+		Short: "Print the resolved config file path",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			path, err := resolveConfigPath()
+			if err != nil {
+				return err
+			}
+			fmt.Println(path)
+			return nil
+		},
+	})
+	return cmd
 }

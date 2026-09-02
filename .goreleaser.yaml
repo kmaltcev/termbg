@@ -39,3 +39,29 @@ release:
 
 changelog:
   disable: true
+
+# Publishes a Homebrew Formula to the kmaltcev/homebrew-termbg tap on
+# every release, so users can `brew install kmaltcev/termbg/termbg`.
+# Uses the classic "brews" formula publisher (not "homebrew_casks")
+# because casks are macOS-only / app-bundle oriented, while termbg is a
+# plain cross-platform (macOS+Linux) CLI binary — the right fit for a
+# Homebrew Formula, despite "brews" being docs-deprecated in favor of
+# casks upstream.
+brews:
+  - name: termbg
+    repository:
+      owner: kmaltcev
+      name: homebrew-termbg
+      branch: main
+      token: "{{ envOrDefault \"HOMEBREW_TAP_GITHUB_TOKEN\" \"\" }}"
+    # Skip pushing to the tap until HOMEBREW_TAP_GITHUB_TOKEN is
+    # configured as a repo secret, so releases keep succeeding even
+    # before that one-time setup step is done.
+    skip_upload: "{{ if isEnvSet \"HOMEBREW_TAP_GITHUB_TOKEN\" }}false{{ else }}true{{ end }}"
+    homepage: "https://github.com/kmaltcev/termbg"
+    description: "Rotate terminal emulator backgrounds from local or wallhaven.cc sources, on schedule or on request."
+    license: "MIT"
+    test: |
+      system "#{bin}/termbg", "--version"
+    install: |
+      bin.install "termbg"

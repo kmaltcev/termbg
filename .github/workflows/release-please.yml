@@ -59,3 +59,9 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Fine-grained PAT scoped to kmaltcev/homebrew-termbg only,
+          # needed because the default GITHUB_TOKEN can't push to a
+          # different repository. Until this secret is set, the
+          # brews section in .goreleaser.yaml auto-skips (see
+          # skip_upload there) so releases still succeed without it.
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}

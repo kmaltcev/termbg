@@ -113,9 +113,19 @@ source since there's no long-running process yet).
 
 ### Usage (prototype)
 
+Install via Homebrew (macOS or Linux):
+
+```sh
+brew install kmaltcev/termbg/termbg
+```
+
+Or build from source:
+
 ```sh
 go build -o termbg ./cmd/termbg
+```
 
+```sh
 ./termbg init            # interactive setup wizard (source, terminal, schedule)
 ./termbg sources          # list registered source/terminal plugins
 ./termbg status           # show resolved config

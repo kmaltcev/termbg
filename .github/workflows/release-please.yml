@@ -1,0 +1,24 @@
+name: release-please
+
+# Runs on every push to main (i.e. every merged PR). release-please
+# inspects Conventional Commits history since the last release and
+# either opens/updates a "release PR" (bumping version + CHANGELOG) or,
+# once that release PR itself is merged, tags the repo and publishes a
+# GitHub Release. Publishing the release triggers release-build.yml to
+# attach cross-platform binaries.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          release-type: go

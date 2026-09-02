@@ -27,10 +27,15 @@ import (
 
 var configPathFlag string
 
+// version is set at build time via -ldflags "-X main.version=...";
+// defaults to "dev" for local/unreleased builds.
+var version = "dev"
+
 func main() {
 	root := &cobra.Command{
-		Use:   "termbg",
-		Short: "Rotate terminal emulator backgrounds on schedule or on request",
+		Use:     "termbg",
+		Short:   "Rotate terminal emulator backgrounds on schedule or on request",
+		Version: version,
 	}
 	root.PersistentFlags().StringVar(&configPathFlag, "config", "", "path to config.toml (default: $XDG_CONFIG_HOME/termbg/config.toml)")
 

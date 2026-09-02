@@ -42,6 +42,17 @@ func Run(existing *config.Config) (*config.Config, error) {
 		terminalChoice = terminals[0]
 	}
 
+	ghosttyCfg := cfg.TerminalConfig["ghostty"]
+	ghosttyFit, _ := ghosttyCfg["fit"].(string)
+	if ghosttyFit == "" {
+		ghosttyFit = "contain"
+	}
+	ghosttyPosition, _ := ghosttyCfg["position"].(string)
+	if ghosttyPosition == "" {
+		ghosttyPosition = "center"
+	}
+	ghosttyRepeat, _ := ghosttyCfg["repeat"].(bool)
+
 	localCfg := cfg.SourceConfig["local"]
 	localDir, _ := localCfg["dir"].(string)
 	localRecursive, _ := localCfg["recursive"].(bool)
@@ -187,6 +198,36 @@ func Run(existing *config.Config) (*config.Config, error) {
 					return nil
 				}),
 		).WithHideFunc(func() bool { return scheduleChoice != scheduleCustom }),
+
+		// --- ghostty display options ---
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title("Ghostty: how should the image fit the window? (background-image-fit)").
+				Options(
+					huh.NewOption("Contain (show whole image, may letterbox)", "contain"),
+					huh.NewOption("Cover (fill window, may crop image)", "cover"),
+					huh.NewOption("Stretch (fill window, ignores aspect ratio)", "stretch"),
+					huh.NewOption("None (no scaling)", "none"),
+				).
+				Value(&ghosttyFit),
+			huh.NewSelect[string]().
+				Title("Ghostty: where should the image be anchored? (background-image-position)").
+				Options(
+					huh.NewOption("Center", "center"),
+					huh.NewOption("Top left", "top-left"),
+					huh.NewOption("Top center", "top-center"),
+					huh.NewOption("Top right", "top-right"),
+					huh.NewOption("Center left", "center-left"),
+					huh.NewOption("Center right", "center-right"),
+					huh.NewOption("Bottom left", "bottom-left"),
+					huh.NewOption("Bottom center", "bottom-center"),
+					huh.NewOption("Bottom right", "bottom-right"),
+				).
+				Value(&ghosttyPosition),
+			huh.NewConfirm().
+				Title("Ghostty: repeat/tile the image to fill blank space? (background-image-repeat)").
+				Value(&ghosttyRepeat),
+		).WithHideFunc(func() bool { return terminalChoice != "ghostty" }),
 	)
 
 	if err := form.Run(); err != nil {
@@ -235,6 +276,11 @@ func Run(existing *config.Config) (*config.Config, error) {
 
 	if _, ok := cfg.TerminalConfig[terminalChoice]; !ok {
 		cfg.TerminalConfig[terminalChoice] = map[string]any{}
+	}
+	if terminalChoice == "ghostty" {
+		cfg.TerminalConfig["ghostty"]["fit"] = ghosttyFit
+		cfg.TerminalConfig["ghostty"]["position"] = ghosttyPosition
+		cfg.TerminalConfig["ghostty"]["repeat"] = ghosttyRepeat
 	}
 
 	return &cfg, nil

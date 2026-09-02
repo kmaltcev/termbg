@@ -1,7 +1,8 @@
 // Package ghostty implements a termbg adapter.Adapter for the Ghostty
 // terminal (https://ghostty.org), which reads background-image and
-// related keys from its config file and (in recent versions) reloads
-// them live when the file changes on disk.
+// related keys from its config file. Ghostty does NOT auto-reload
+// config changes: the user must reload manually (Ctrl+Shift+, or the
+// "Reload Configuration" menu item) or fully restart the app.
 package ghostty
 
 import (
@@ -18,11 +19,33 @@ func init() {
 	adapter.Register("ghostty", newFromConfig)
 }
 
-const configKey = "background-image"
+const (
+	keyImage    = "background-image"
+	keyFit      = "background-image-fit"
+	keyPosition = "background-image-position"
+	keyRepeat   = "background-image-repeat"
+)
 
-// Adapter writes the background-image key into a Ghostty config file.
+// ValidFits are the fit values Ghostty accepts for background-image-fit
+// (available since Ghostty 1.2.0). Default is "contain".
+var ValidFits = []string{"contain", "cover", "stretch", "none"}
+
+// ValidPositions are the position values Ghostty accepts for
+// background-image-position (available since Ghostty 1.2.0). Default
+// is "center".
+var ValidPositions = []string{
+	"top-left", "top-center", "top-right",
+	"center-left", "center", "center-right",
+	"bottom-left", "bottom-center", "bottom-right",
+}
+
+// Adapter writes the background-image key (and optional fit/position/
+// repeat keys) into a Ghostty config file.
 type Adapter struct {
 	configPath string
+	fit        string
+	position   string
+	repeat     *bool
 }
 
 func newFromConfig(cfg map[string]any) (adapter.Adapter, error) {
@@ -34,7 +57,13 @@ func newFromConfig(cfg map[string]any) (adapter.Adapter, error) {
 			return nil, err
 		}
 	}
-	return New(path), nil
+	a := New(path)
+	a.fit, _ = cfg["fit"].(string)
+	a.position, _ = cfg["position"].(string)
+	if repeat, ok := cfg["repeat"].(bool); ok {
+		a.repeat = &repeat
+	}
+	return a, nil
 }
 
 // New creates a Ghostty adapter that manages the given config file.
@@ -56,29 +85,27 @@ func defaultConfigPath() (string, error) {
 
 func (a *Adapter) Name() string { return "ghostty" }
 
-// SetBackground rewrites the background-image line in the Ghostty
-// config file (adding it if absent) and leaves all other lines/config
-// keys untouched. Ghostty watches its config file and reloads
-// automatically; no extra signal/reload step is required on recent
-// versions.
+// SetBackground rewrites the background-image line (and, if
+// configured, background-image-fit/-position/-repeat) in the Ghostty
+// config file, adding keys that are absent and leaving all other
+// lines/config keys untouched. Ghostty does not reload config changes
+// automatically: the user must reload manually (Ctrl+Shift+, or the
+// "Reload Configuration" menu item) for the new background to appear.
 func (a *Adapter) SetBackground(imagePath string) error {
 	lines, err := readLines(a.configPath)
 	if err != nil {
 		return fmt.Errorf("ghostty adapter: reading config %s: %w", a.configPath, err)
 	}
 
-	newLine := fmt.Sprintf("%s = %s", configKey, imagePath)
-	replaced := false
-	for i, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, configKey+" ") || strings.HasPrefix(trimmed, configKey+"=") {
-			lines[i] = newLine
-			replaced = true
-			break
-		}
+	lines = setKeyValue(lines, keyImage, imagePath)
+	if a.fit != "" {
+		lines = setKeyValue(lines, keyFit, a.fit)
 	}
-	if !replaced {
-		lines = append(lines, newLine)
+	if a.position != "" {
+		lines = setKeyValue(lines, keyPosition, a.position)
+	}
+	if a.repeat != nil {
+		lines = setKeyValue(lines, keyRepeat, fmt.Sprintf("%t", *a.repeat))
 	}
 
 	if err := os.MkdirAll(filepath.Dir(a.configPath), 0o755); err != nil {
@@ -92,6 +119,20 @@ func (a *Adapter) SetBackground(imagePath string) error {
 		return fmt.Errorf("ghostty adapter: replacing config: %w", err)
 	}
 	return nil
+}
+
+// setKeyValue replaces the first "key = ..." / "key=..." line for key
+// in lines with a freshly formatted one, or appends it if absent.
+func setKeyValue(lines []string, key, value string) []string {
+	newLine := fmt.Sprintf("%s = %s", key, value)
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, key+" ") || strings.HasPrefix(trimmed, key+"=") {
+			lines[i] = newLine
+			return lines
+		}
+	}
+	return append(lines, newLine)
 }
 
 func readLines(path string) ([]string, error) {

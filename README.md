@@ -95,8 +95,12 @@ Early CLI prototype. Implemented so far:
 - `internal/source/wallhaven` — wallhaven.cc `/search` API source with
   arbitrary filter passthrough and local caching of downloaded images
 - `internal/adapter` — pluggable terminal `Adapter` interface + registry
-- `internal/adapter/ghostty` — writes `background-image` into Ghostty's
-  config file
+- `internal/adapter/ghostty` — writes `background-image`,
+  `background-image-fit`, `background-image-position` and
+  `background-image-repeat` into Ghostty's config file. Ghostty does
+  **not** reload config changes automatically — reload manually
+  (`Ctrl+Shift+,` or the "Reload Configuration" menu item) or restart
+  the app to see a newly applied background
 - `internal/config` — TOML config loading (see `config.example.toml`)
 - `internal/wizard` — interactive `termbg init` setup flow (huh-based)
 - `cmd/termbg` — CLI: `termbg init`, `termbg next`, `termbg status`,
